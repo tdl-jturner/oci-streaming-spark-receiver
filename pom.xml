@@ -1,0 +1,162 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>net.thedigitallink</groupId>
+  <artifactId>oci-streaming-spark-receiver</artifactId>
+  <version>0.1-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+    <maven-dependency-plugin.version>3.1.1</maven-dependency-plugin.version>
+    <maven-jar-plugin.version>3.1.2</maven-jar-plugin.version>
+    <spark.version>2.2.0</spark.version>
+    <jackson.version>2.9.9</jackson.version>
+    <jersey.version>2.27</jersey.version>
+    <start-class>net.thedigitalink.oci.streams.spark.CustomReceiver</start-class>
+  </properties>
+
+ <dependencies>
+
+   <dependency>
+     <groupId>com.oracle.oci.sdk</groupId>
+     <artifactId>oci-java-sdk-audit</artifactId>
+   </dependency>
+
+   <dependency>
+     <groupId>com.oracle.oci.sdk</groupId>
+     <artifactId>oci-java-sdk-core</artifactId>
+   </dependency>
+
+   <dependency>
+     <groupId>com.oracle.oci.sdk</groupId>
+     <artifactId>oci-java-sdk-database</artifactId>
+   </dependency>
+
+   <dependency>
+     <groupId>com.oracle.oci.sdk</groupId>
+     <artifactId>oci-java-sdk-streaming</artifactId>
+   </dependency>
+
+   <dependency>
+     <groupId>org.apache.spark</groupId>
+     <artifactId>spark-core_2.11</artifactId>
+     <version>${spark.version}</version>
+     <exclusions>
+       <exclusion>
+         <groupId>org.glassfish.jersey.containers</groupId>
+         <artifactId>jersey-container-servlet</artifactId>
+       </exclusion>
+       <exclusion>
+         <groupId>org.glassfish.jersey.core</groupId>
+         <artifactId>jersey-common</artifactId>
+       </exclusion>
+       <exclusion>
+         <groupId>org.glassfish.jersey.core</groupId>
+         <artifactId>jersey-server</artifactId>
+       </exclusion>
+     </exclusions>
+   </dependency>
+
+   <dependency>
+     <groupId>org.apache.spark</groupId>
+     <artifactId>spark-streaming_2.11</artifactId>
+     <version>${spark.version}</version>
+   </dependency>
+
+   <dependency>
+     <groupId>org.glassfish.jersey.containers</groupId>
+     <artifactId>jersey-container-servlet</artifactId>
+     <version>${jersey.version}</version>
+   </dependency>
+   <dependency>
+     <groupId>org.glassfish.jersey.core</groupId>
+     <artifactId>jersey-common</artifactId>
+     <version>${jersey.version}</version>
+   </dependency>
+   <dependency>
+     <groupId>org.glassfish.jersey.core</groupId>
+     <artifactId>jersey-server</artifactId>
+     <version>${jersey.version}</version>
+   </dependency>
+
+   <dependency>
+     <groupId>com.fasterxml.jackson.module</groupId>
+     <artifactId>jackson-module-scala_2.11</artifactId>
+     <version>${jackson.version}</version>
+   </dependency>
+
+
+ </dependencies>
+
+ <dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>com.oracle.oci.sdk</groupId>
+      <artifactId>oci-java-sdk-bom</artifactId>
+      <!-- replace the version below with your required version -->
+      <version>1.8.1</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+
+<build>
+  <plugins>
+    <plugin>
+      <artifactId>maven-assembly-plugin</artifactId>
+      <executions>
+        <execution>
+          <phase>package</phase>
+          <goals>
+            <goal>single</goal>
+          </goals>
+        </execution>
+      </executions>
+      <configuration>
+        <descriptorRefs>
+          <descriptorRef>jar-with-dependencies</descriptorRef>
+        </descriptorRefs>
+      </configuration>
+    </plugin>
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-dependency-plugin</artifactId>
+      <version>${maven-dependency-plugin.version}</version>
+      <executions>
+        <execution>
+          <id>copy-dependencies</id>
+          <phase>prepare-package</phase>
+          <goals>
+            <goal>copy-dependencies</goal>
+          </goals>
+          <configuration>
+            <outputDirectory>
+              ${project.build.directory}/libs
+            </outputDirectory>
+          </configuration>
+        </execution>
+      </executions>
+    </plugin>
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-jar-plugin</artifactId>
+      <version>${maven-jar-plugin.version}</version>
+      <configuration>
+        <archive>
+          <manifest>
+            <addClasspath>true</addClasspath>
+            <classpathPrefix>libs/</classpathPrefix>
+            <mainClass>
+              ${start-class}
+            </mainClass>
+          </manifest>
+        </archive>
+      </configuration>
+    </plugin>
+  </plugins>
+</build>
+</project>

@@ -21,8 +21,17 @@
  <dependencies>
 
    <dependency>
-     <groupId>com.oracle.oci.sdk</groupId>
-     <artifactId>oci-java-sdk-audit</artifactId>
+     <groupId>org.apache.spark</groupId>
+     <artifactId>spark-core_2.11</artifactId>
+     <version>${spark.version}</version>
+     <scope>provided</scope>
+   </dependency>
+
+   <dependency>
+     <groupId>org.apache.spark</groupId>
+     <artifactId>spark-streaming_2.11</artifactId>
+     <version>${spark.version}</version>
+     <scope>provided</scope>
    </dependency>
 
    <dependency>
@@ -32,62 +41,8 @@
 
    <dependency>
      <groupId>com.oracle.oci.sdk</groupId>
-     <artifactId>oci-java-sdk-database</artifactId>
-   </dependency>
-
-   <dependency>
-     <groupId>com.oracle.oci.sdk</groupId>
      <artifactId>oci-java-sdk-streaming</artifactId>
    </dependency>
-
-   <dependency>
-     <groupId>org.apache.spark</groupId>
-     <artifactId>spark-core_2.11</artifactId>
-     <version>${spark.version}</version>
-     <exclusions>
-       <exclusion>
-         <groupId>org.glassfish.jersey.containers</groupId>
-         <artifactId>jersey-container-servlet</artifactId>
-       </exclusion>
-       <exclusion>
-         <groupId>org.glassfish.jersey.core</groupId>
-         <artifactId>jersey-common</artifactId>
-       </exclusion>
-       <exclusion>
-         <groupId>org.glassfish.jersey.core</groupId>
-         <artifactId>jersey-server</artifactId>
-       </exclusion>
-     </exclusions>
-   </dependency>
-
-   <dependency>
-     <groupId>org.apache.spark</groupId>
-     <artifactId>spark-streaming_2.11</artifactId>
-     <version>${spark.version}</version>
-   </dependency>
-
-   <dependency>
-     <groupId>org.glassfish.jersey.containers</groupId>
-     <artifactId>jersey-container-servlet</artifactId>
-     <version>${jersey.version}</version>
-   </dependency>
-   <dependency>
-     <groupId>org.glassfish.jersey.core</groupId>
-     <artifactId>jersey-common</artifactId>
-     <version>${jersey.version}</version>
-   </dependency>
-   <dependency>
-     <groupId>org.glassfish.jersey.core</groupId>
-     <artifactId>jersey-server</artifactId>
-     <version>${jersey.version}</version>
-   </dependency>
-
-   <dependency>
-     <groupId>com.fasterxml.jackson.module</groupId>
-     <artifactId>jackson-module-scala_2.11</artifactId>
-     <version>${jackson.version}</version>
-   </dependency>
-
 
  </dependencies>
 

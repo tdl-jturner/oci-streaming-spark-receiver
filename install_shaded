@@ -1,0 +1,11 @@
+# Based on https://github.com/oracle/oci-java-sdk/tree/master/bmc-shaded/bmc-shaded-full
+git clone git@github.com:oracle/oci-java-sdk.git tmp-shaded-install
+cd tmp-shaded-install
+git checkout v1.8.2
+mvn install:install-file -Dfile=pom.xml -Dpackaging=pom -DpomFile=pom.xml
+mvn install:install-file -Dfile=bmc-shaded/pom.xml -Dpackaging=pom -DpomFile=bmc-shaded/pom.xml
+wget https://github.com/oracle/oci-java-sdk/releases/download/v1.8.2/oci-java-sdk.zip
+unzip oci-java-sdk.zip shaded/lib/oci-java-sdk-full-shaded-1.8.2.jar
+mvn install:install-file -Dfile=shaded/lib/oci-java-sdk-full-shaded-1.8.2.jar -Dpackaging=jar -DpomFile=bmc-shaded/bmc-shaded-full/pom.xml
+cd ..
+

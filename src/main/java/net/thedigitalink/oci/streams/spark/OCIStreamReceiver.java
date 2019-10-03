@@ -1,19 +1,14 @@
 package net.thedigitalink.oci.streams.spark;
 
 import com.google.common.util.concurrent.Uninterruptibles;
-import com.oracle.bmc.auth.InstancePrincipalsAuthenticationDetailsProvider;
-import com.oracle.bmc.streaming.StreamAdminClient;
+import com.oracle.bmc.auth.*;
 import com.oracle.bmc.streaming.StreamClient;
 import com.oracle.bmc.streaming.model.CreateGroupCursorDetails;
 import com.oracle.bmc.streaming.model.Message;
-import com.oracle.bmc.streaming.model.Stream;
 import com.oracle.bmc.streaming.requests.CreateGroupCursorRequest;
 import com.oracle.bmc.streaming.requests.GetMessagesRequest;
-import com.oracle.bmc.streaming.requests.GetStreamRequest;
-import com.oracle.bmc.streaming.requests.ListStreamsRequest;
 import com.oracle.bmc.streaming.responses.CreateGroupCursorResponse;
 import com.oracle.bmc.streaming.responses.GetMessagesResponse;
-import com.oracle.bmc.streaming.responses.ListStreamsResponse;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.storage.StorageLevel;
@@ -21,7 +16,12 @@ import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import org.apache.spark.streaming.receiver.Receiver;
+import shaded.com.oracle.oci.javasdk.com.google.common.base.Supplier;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -31,14 +31,20 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  */
 public class OCIStreamReceiver extends Receiver<String> {
 
+    public enum AuthProvider {
+        INSTANCE_PRINCIPALS,
+        BDC_AUTH,
+        DEFAULT_CONFIG
+    }
+
     private static Logger log = Logger.getLogger(OCIStreamReceiver.class);
 
     private final String groupName;
     private final String instanceName;
     private final String streamId;
     private final String streamEndpoint;
-    private final String compartmentId;
     private final int limit;
+    private final AuthProvider authProvider;
 
     /**
      * Sample main method to test from command line
@@ -47,16 +53,15 @@ public class OCIStreamReceiver extends Receiver<String> {
      */
     public static void main(String[] args) throws Exception {
         if (args.length < 5) {
-            System.err.println("Usage: OCIStreamReceiver <compartmentId> <groupName> <instanceName> <streamName> <limit>");
+            System.err.println("Usage: OCIStreamReceiver <streamId> <streamEndpoint> <groupName> <instanceName> <limit>");
             System.exit(1);
         }
 
-
-        // Create the context with a 1 second batch size
+        // Create the context with a 10 second batch size
         SparkConf sparkConf = new SparkConf().setAppName("Test - OCIStreamReceiver");
-        sparkConf.set("spark.master","local");
-        JavaStreamingContext ssc = new JavaStreamingContext(sparkConf, new Duration(1000));
-        JavaReceiverInputDStream<String> lines = ssc.receiverStream(new OCIStreamReceiver(args[0],args[1],args[2],args[3],Integer.parseInt(args[4])));
+        sparkConf.set("spark.master","local[2]");
+        JavaStreamingContext ssc = new JavaStreamingContext(sparkConf, new Duration(10000));
+        JavaReceiverInputDStream<String> lines = ssc.receiverStream(new OCIStreamReceiver(AuthProvider.INSTANCE_PRINCIPALS, args[0],args[1],args[2],args[3],Integer.parseInt(args[4])));
         lines.print();
         ssc.start();
         ssc.awaitTermination();
@@ -65,23 +70,16 @@ public class OCIStreamReceiver extends Receiver<String> {
 
     /**
      * Construct OCI Stream Receiver
-     * @param compartmentId OCID of compartment
      * @param groupName streaming group name
      * @param instanceName streaming instance name
-     * @param streamName stream name
      * @throws Exception failure to load the stream
      */
-    public OCIStreamReceiver(String compartmentId, String groupName, String instanceName, String streamName, int limit) throws Exception{
+    public OCIStreamReceiver(AuthProvider authProvider, String streamId, String streamEndpoint, String groupName, String instanceName, int limit) {
         super(StorageLevel.MEMORY_AND_DISK_2());
 
-        this.compartmentId = compartmentId;
-        log.info(String.format("Setting compartmentId to %s",this.compartmentId));
-
-        Stream stream = getStream(compartmentId, streamName);
-
-        this.streamId = stream.getId();
+        this.streamId = streamId;
         log.info(String.format("Setting StreamId to %s",this.streamId));
-        this.streamEndpoint = stream.getMessagesEndpoint();
+        this.streamEndpoint = streamEndpoint;
         log.info(String.format("Setting Endpoint to %s",this.streamEndpoint));
         this.groupName=groupName;
         log.info(String.format("Setting Group Name to %s",this.groupName));
@@ -89,40 +87,62 @@ public class OCIStreamReceiver extends Receiver<String> {
         log.info(String.format("Setting Instance Name to %s",this.instanceName));
         this.limit=limit;
         log.info(String.format("Setting Limit to %s",this.limit));
+        this.authProvider=authProvider;
+        log.info(String.format("Setting Auth Provider to %s",this.authProvider));
     }
 
-    /**
-     * Lookup stream
-     * @param compartmentId Compartment ID
-     * @param streamName Name of Stream
-     * @return Stream object
-     */
-    private Stream getStream(String compartmentId, String streamName)  {
+    private BasicAuthenticationDetailsProvider getAuthProvider() {
+        switch(this.authProvider) {
+            case BDC_AUTH:
+                return getBDCAuthProvider();
+            case INSTANCE_PRINCIPALS:
+                return getInstancePrincipalsAuthProvider();
+            case DEFAULT_CONFIG:
+            default:
+                return getConfigFileAuthProvider();
+        }
+    }
+
+    private AuthenticationDetailsProvider  getConfigFileAuthProvider() {
         try {
-            InstancePrincipalsAuthenticationDetailsProvider provider = InstancePrincipalsAuthenticationDetailsProvider.builder().build();
-
-            StreamAdminClient adminClient = new StreamAdminClient(provider);
-            ListStreamsRequest listRequest =
-                    ListStreamsRequest.builder()
-                            .compartmentId(compartmentId)
-                            .lifecycleState(Stream.LifecycleState.Active)
-                            .name(streamName)
-                            .build();
-
-            ListStreamsResponse listResponse = adminClient.listStreams(listRequest);
-
-            if (listResponse.getItems().isEmpty()) {
-                throw new AssertionError(String.format("Stream {} does not exist", streamName));
-            }
-            String streamId = listResponse.getItems().get(0).getId();
-
-
-            return adminClient.getStream(GetStreamRequest.builder().streamId(streamId).build()).getStream();
+            return new ConfigFileAuthenticationDetailsProvider("DEFAULT");
         }
         catch (Exception e) {
-            log.error("Failed to get Stream",e);
+            log.error("Failed to get config file auth provider",e);
             return null;
         }
+    }
+
+    private AuthenticationDetailsProvider getBDCAuthProvider() {
+        try (InputStream input = new FileInputStream("/u01/bdcsce/data/etc/bdcsce/conf/datasources.properties")) {
+            Properties prop = new Properties();
+            prop.load(input);
+            return getSimpleAuthProvider(
+                    prop.getProperty("oci_storage_tenantid"),
+                    prop.getProperty("oci_storage_userid"),
+                    prop.getProperty("oci_storage_fingerprint"),
+                    "/u01/bdcsce/data/etc/bdcsce/conf/oci_api_key.pem",
+                    null);
+
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            return null;
+        }
+    }
+
+    private AuthenticationDetailsProvider  getSimpleAuthProvider(String tenantId, String userId, String fingerprint, String pemFilePath, String passPhrase) {
+        Supplier<InputStream> supplier = new SimplePrivateKeySupplier(pemFilePath);
+        return SimpleAuthenticationDetailsProvider.builder()
+                .tenantId(tenantId)
+                .userId(userId)
+                .fingerprint(fingerprint)
+                .privateKeySupplier(supplier)
+                .passphraseCharacters(passPhrase.toCharArray())
+                .build();
+    }
+
+    private InstancePrincipalsAuthenticationDetailsProvider getInstancePrincipalsAuthProvider() {
+        return InstancePrincipalsAuthenticationDetailsProvider.builder().build();
     }
 
     /**
@@ -130,8 +150,7 @@ public class OCIStreamReceiver extends Receiver<String> {
      * @return StreamClient for defined stream
      */
     private StreamClient getStreamClient() {
-        InstancePrincipalsAuthenticationDetailsProvider provider = InstancePrincipalsAuthenticationDetailsProvider.builder().build();
-        StreamClient streamClient = new StreamClient(provider);
+        StreamClient streamClient = new StreamClient(getAuthProvider());
         streamClient.setEndpoint(this.streamEndpoint);
         return streamClient;
     }
